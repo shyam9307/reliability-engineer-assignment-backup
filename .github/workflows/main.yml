@@ -1,3 +1,4 @@
+
 name: CI - Test and Build
 
 on:
@@ -6,6 +7,19 @@ on:
   pull_request:
     branches: [master]
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reliability-assignment-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-south-1
+  AWS_ACCOUNT_ID: "819693014102"
+  ECR_REPOSITORY: reliability-pipeline
+  TF_IN_AUTOMATION: "true"
 
 jobs:
   test:
@@ -29,14 +43,14 @@ jobs:
       - name: Run tests
         run: pytest -q
 
-      - name: Validate Terraform
+      - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform format check
         working-directory: infra/terraform
         run: terraform fmt -check -recursive
 
-      - name: Terraform initialization
+      - name: Terraform initialization (validate providers only)
         working-directory: infra/terraform
         run: terraform init -backend=false
 
@@ -52,9 +66,9 @@ jobs:
           push: false
           tags: reliability-pipeline:ci
 
-  aws-auth-check:
-    name: Verify AWS OIDC
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+  deploy-image:
+    name: Manual AWS backend and image publish
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master'
     needs: test
     runs-on: ubuntu-latest
     permissions:
@@ -62,11 +76,70 @@ jobs:
       id-token: write
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::819693014102:role/GitHubActions-ReliabilityAssignment
-          aws-region: ap-south-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Verify AWS identity
         run: aws sts get-caller-identity
+
+      - name: Verify Terraform state bucket
+        run: |
+          aws s3api head-bucket \
+            --bucket relassign-tfstate-819693014102
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Initialize S3 backend
+        working-directory: infra/terraform
+        run: terraform init -input=false
+
+      - name: Validate Terraform with backend
+        working-directory: infra/terraform
+        run: terraform validate
+
+      - name: Ensure ECR repository exists
+        run: |
+          aws ecr describe-repositories \
+            --repository-names "$ECR_REPOSITORY" \
+            --region "$AWS_REGION" >/dev/null 2>&1 || \
+          aws ecr create-repository \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-tag-mutability IMMUTABLE \
+            --image-scanning-configuration scanOnPush=true \
+            --region "$AWS_REGION"
+
+      - name: Log in to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            --file docker/Dockerfile \
+            --tag "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
+            .
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          echo "Published image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+      - name: Create Terraform plan (no infrastructure changes applied)
+        working-directory: infra/terraform
+        env:
+          TF_VAR_container_image: ${{ steps.ecr-login.outputs.registry }}/reliability-pipeline:${{ github.sha }}
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Save Terraform plan for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: infra/terraform/tfplan
+          retention-days: 1
