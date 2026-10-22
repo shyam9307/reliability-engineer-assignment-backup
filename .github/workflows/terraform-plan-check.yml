@@ -1,0 +1,44 @@
+
+name: Terraform Plan Check Only
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ap-south-1
+
+jobs:
+  plan:
+    name: Inspect Terraform state safely
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::819693014102:role/GitHubActions-ReliabilityAssignment
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Initialize Terraform
+        working-directory: infra/terraform
+        run: terraform init -input=false
+
+      - name: Show current Terraform state
+        working-directory: infra/terraform
+        run: terraform state list
+
+      - name: Check current plan only
+        working-directory: infra/terraform
+        env:
+          TF_VAR_container_image: 819693014102.dkr.ecr.ap-south-1.amazonaws.com/reliability-pipeline:latest
+        run: terraform plan -input=false -lock-timeout=60s
