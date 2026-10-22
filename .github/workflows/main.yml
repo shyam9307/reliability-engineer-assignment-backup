@@ -155,3 +155,36 @@ jobs:
         if: ${{ false }}
         working-directory: infra/terraform
         run: terraform apply -input=false -auto-approve tfplan
+
+      
+  inspect-terraform-state:
+    name: Inspect Terraform state safely
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::819693014102:role/GitHubActions-ReliabilityAssignment
+          aws-region: ap-south-1
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Initialize existing Terraform state
+        working-directory: infra/terraform
+        run: terraform init -input=false
+
+      - name: Check current Terraform state (read-only)
+        working-directory: infra/terraform
+        run: |
+          terraform state list
+          terraform state show aws_vpc.main
+          terraform state show aws_eip.nat
