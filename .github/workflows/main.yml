@@ -199,6 +199,7 @@ jobs:
   untaint-existing-network:
     name: Clear taint on verified existing resources
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master'
+    needs: inspect-terraform-state
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -221,14 +222,24 @@ jobs:
         working-directory: infra/terraform
         run: terraform init -input=false
 
-      - name: Confirm resources still exist
+      - name: Confirm existing VPC and Elastic IP
+        shell: bash
         run: |
-          aws ec2 describe-vpcs \
+          set -euo pipefail
+
+          VPC_STATE=$(aws ec2 describe-vpcs \
             --vpc-ids vpc-029f028dd5196761b \
-            --query 'Vpcs[0].State' --output text
-          aws ec2 describe-addresses \
+            --query 'Vpcs[0].State' --output text)
+
+          EIP_ID=$(aws ec2 describe-addresses \
             --allocation-ids eipalloc-0916bc490cd1a88d7 \
-            --query 'Addresses[0].AllocationId' --output text
+            --query 'Addresses[0].AllocationId' --output text)
+
+          echo "VPC state: $VPC_STATE"
+          echo "Elastic IP allocation: $EIP_ID"
+
+          test "$VPC_STATE" = "available"
+          test "$EIP_ID" = "eipalloc-0916bc490cd1a88d7"
 
       - name: Clear VPC taint
         working-directory: infra/terraform
