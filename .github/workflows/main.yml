@@ -137,9 +137,15 @@ jobs:
           TF_VAR_container_image: ${{ steps.ecr-login.outputs.registry }}/reliability-pipeline:${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
         run: terraform plan -input=false -out=tfplan
 
+      - name: Render readable Terraform plan
+        working-directory: infra/terraform
+        run: terraform show -no-color tfplan > tfplan.txt
+      
       - name: Save Terraform plan for review
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan
-          path: infra/terraform/tfplan
+          path: |
+            infra/terraform/tfplan
+            infra/terraform/tfplan.txt
           retention-days: 1
