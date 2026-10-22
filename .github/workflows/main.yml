@@ -91,7 +91,7 @@ jobs:
       - name: Verify Terraform state bucket
         run: |
           aws s3api head-bucket \
-            --bucket relassign-tfstate-819693014102
+            --bucket relassign-tfstate-819693014102-819693014102-ap-south-1-an
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
