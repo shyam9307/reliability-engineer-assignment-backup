@@ -111,7 +111,7 @@ Model selection and hosting requirements should be evaluated using measured late
 
 ## Limitations
 
-This is a local reliability-engineering demonstration. It uses synthetic audio references, a synthetic transcript, and simulated latency and failures. It does not perform actual speech recognition, language generation, or speech synthesis.
+This is a local reliability-engineering demonstration. It uses synthetic audio references, a synthetic transcript, and simulated latency and failures. It does not perform actual speech recognition, language generation, or speech synthesis..
 
 ## License
 
