@@ -122,7 +122,7 @@ jobs:
       - name: Build and push image
         env:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           docker build \
             --file docker/Dockerfile \
@@ -134,7 +134,7 @@ jobs:
       - name: Create Terraform plan (no infrastructure changes applied)
         working-directory: infra/terraform
         env:
-          TF_VAR_container_image: ${{ steps.ecr-login.outputs.registry }}/reliability-pipeline:${{ github.sha }}
+          TF_VAR_container_image: ${{ steps.ecr-login.outputs.registry }}/reliability-pipeline:${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
         run: terraform plan -input=false -out=tfplan
 
       - name: Save Terraform plan for review
