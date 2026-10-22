@@ -1,4 +1,3 @@
-
 name: CI - Test and Build
 
 on:
@@ -140,7 +139,7 @@ jobs:
       - name: Render readable Terraform plan
         working-directory: infra/terraform
         run: terraform show -no-color tfplan > tfplan.txt
-      
+
       - name: Save Terraform plan for review
         uses: actions/upload-artifact@v4
         with:
@@ -150,13 +149,11 @@ jobs:
             infra/terraform/tfplan.txt
           retention-days: 1
 
-      
       - name: Apply reviewed Terraform plan (DISABLED)
         if: ${{ false }}
         working-directory: infra/terraform
         run: terraform apply -input=false -auto-approve tfplan
 
-      
   inspect-terraform-state:
     name: Inspect Terraform state safely
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master'
@@ -198,3 +195,51 @@ jobs:
             --allocation-ids eipalloc-0916bc490cd1a88d7 \
             --query 'Addresses[0].{AllocationId:AllocationId,PublicIp:PublicIp,AssociationId:AssociationId}' \
             --output table
+
+  untaint-existing-network:
+    name: Clear taint on verified existing resources
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::819693014102:role/GitHubActions-ReliabilityAssignment
+          aws-region: ap-south-1
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Initialize Terraform state
+        working-directory: infra/terraform
+        run: terraform init -input=false
+
+      - name: Confirm resources still exist
+        run: |
+          aws ec2 describe-vpcs \
+            --vpc-ids vpc-029f028dd5196761b \
+            --query 'Vpcs[0].State' --output text
+          aws ec2 describe-addresses \
+            --allocation-ids eipalloc-0916bc490cd1a88d7 \
+            --query 'Addresses[0].AllocationId' --output text
+
+      - name: Clear VPC taint
+        working-directory: infra/terraform
+        run: terraform untaint aws_vpc.main
+
+      - name: Clear Elastic IP taint
+        working-directory: infra/terraform
+        run: terraform untaint aws_eip.nat
+
+      - name: Verify updated state
+        working-directory: infra/terraform
+        run: |
+          terraform state show aws_vpc.main
+          terraform state show aws_eip.nat
