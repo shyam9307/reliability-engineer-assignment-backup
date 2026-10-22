@@ -1,4 +1,3 @@
-
 name: CI - Test and Build
 
 on:
@@ -52,3 +51,22 @@ jobs:
           file: ./docker/Dockerfile
           push: false
           tags: reliability-pipeline:ci
+
+  aws-auth-check:
+    name: Verify AWS OIDC
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::819693014102:role/GitHubActions-ReliabilityAssignment
+          aws-region: ap-south-1
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
