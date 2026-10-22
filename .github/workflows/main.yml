@@ -140,6 +140,14 @@ jobs:
         working-directory: infra/terraform
         run: terraform show -no-color tfplan > tfplan.txt
 
+      - name: Summarize planned VPC and Elastic IP actions
+        working-directory: infra/terraform
+        run: |
+          terraform show -no-color tfplan |
+            grep -E -A 3 -B 2 \
+            'aws_vpc\.main|aws_eip\.nat|Plan:|must be replaced|will be updated in-place' \
+            || true
+
       - name: Save Terraform plan for review
         uses: actions/upload-artifact@v4
         with:
