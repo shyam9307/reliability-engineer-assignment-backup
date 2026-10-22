@@ -36,7 +36,7 @@ data "aws_iam_policy_document" "ecs_execution" {
       "ecr:BatchGetImage"
     ]
 
-    resources = [aws_ecr_repository.app.arn]
+    resources = [data.aws_ecr_repository.app.arn]
   }
 
   statement {
