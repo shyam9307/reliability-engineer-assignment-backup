@@ -157,8 +157,7 @@ jobs:
             infra/terraform/tfplan.txt
           retention-days: 1
 
-      - name: Apply reviewed Terraform plan (DISABLED)
-        if: ${{ false }}
+      - name: Apply reviewed Terraform plan
         working-directory: infra/terraform
         run: terraform apply -input=false -auto-approve tfplan
 
