@@ -1,0 +1,67 @@
+
+name: Terraform ALB Recovery Plan
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: reliability-assignment-terraform
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-south-1
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TF_VAR_container_image: "819693014102.dkr.ecr.ap-south-1.amazonaws.com/reliability-pipeline:50956341bf3060c2c6fc318d198a64bb4b0369df-39909548626-1"
+
+jobs:
+  recover-plan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::819693014102:role/GitHubActions-ReliabilityAssignment
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - name: Initialize Terraform
+        working-directory: infra/terraform
+        run: terraform init -input=false
+
+      - name: Verify existing ALB in Terraform state
+        working-directory: infra/terraform
+        run: terraform state show aws_lb.main
+
+      - name: Remove ALB taint
+        working-directory: infra/terraform
+        run: terraform untaint aws_lb.main
+
+      - name: Generate fresh recovery plan
+        working-directory: infra/terraform
+        run: terraform plan -input=false -lock-timeout=60s -out=tfplan
+
+      - name: Display recovery plan
+        working-directory: infra/terraform
+        run: terraform show -no-color tfplan
+
+      - name: Upload reviewed plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: reviewed-terraform-plan
+          path: infra/terraform/tfplan
+          retention-days: 1
