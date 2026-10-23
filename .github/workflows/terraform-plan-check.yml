@@ -61,7 +61,7 @@ jobs:
       - name: Generate infrastructure plan
         working-directory: infra/terraform
         env:
-          TF_VAR_container_image: 819693014102.dkr.ecr.ap-south-1.amazonaws.com/reliability-pipeline:latest
+          TF_VAR_container_image: "819693014102.dkr.ecr.ap-south-1.amazonaws.com/reliability-pipeline:50956341bf3060c2c6fc318d198a64bb4b0369df-39909548626-1"
         run: terraform plan -input=false -lock-timeout=60s -out=tfplan
 
       - name: Display plan for review
