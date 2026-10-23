@@ -47,6 +47,10 @@ jobs:
         working-directory: infra/terraform
         run: terraform state show aws_lb.main
 
+      - name: Remove ALB taint
+        working-directory: infra/terraform
+        run: terraform untaint aws_lb.main
+
       - name: Generate fresh recovery plan
         working-directory: infra/terraform
         run: terraform plan -input=false -lock-timeout=60s -out=tfplan
