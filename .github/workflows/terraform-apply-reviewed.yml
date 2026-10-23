@@ -1,0 +1,127 @@
+
+name: Apply Reviewed Terraform Plan
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "GitHub Actions run ID for Terraform Infrastructure Plan #3"
+        required: true
+        type: string
+      expected_commit:
+        description: "Expected plan commit"
+        required: true
+        default: "705da08"
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: reliability-assignment-terraform
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-south-1
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TF_VAR_container_image: "819693014102.dkr.ecr.ap-south-1.amazonaws.com/reliability-pipeline:50956341bf3060c2c6fc318d198a64bb4b0369df-39909548626-1"
+
+jobs:
+  apply:
+    name: Verify and apply reviewed plan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Verify source run and commit
+        id: verify
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          run="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}")"
+
+          actual_sha="$(jq -r '.head_sha' <<< "$run")"
+          branch="$(jq -r '.head_branch' <<< "$run")"
+          status="$(jq -r '.status' <<< "$run")"
+          conclusion="$(jq -r '.conclusion' <<< "$run")"
+          event="$(jq -r '.event' <<< "$run")"
+
+          [[ "$actual_sha" == "$EXPECTED_COMMIT"* ]] || {
+            echo "ERROR: Source run commit does not match expected commit."
+            exit 1
+          }
+
+          [[ "$branch" == "master" ]] || {
+            echo "ERROR: Source run is not from master."
+            exit 1
+          }
+
+          [[ "$status" == "completed" && "$conclusion" == "success" ]] || {
+            echo "ERROR: Source run did not complete successfully."
+            exit 1
+          }
+
+          [[ "$event" == "workflow_dispatch" ]] || {
+            echo "ERROR: Source run was not manually triggered."
+            exit 1
+          }
+
+          echo "Verified source commit: $actual_sha"
+          echo "Verified source run: $SOURCE_RUN_ID"
+
+      - name: Checkout exact plan commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_commit }}
+
+      - name: Download reviewed plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: reviewed-terraform-plan
+          path: infra/terraform
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify plan file exists
+        working-directory: infra/terraform
+        run: |
+          set -euo pipefail
+          test -f tfplan || {
+            echo "ERROR: Downloaded artifact does not contain tfplan."
+            find . -maxdepth 3 -type f -print
+            exit 1
+          }
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::819693014102:role/GitHubActions-ReliabilityAssignment
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Initialize Terraform backend
+        working-directory: infra/terraform
+        run: terraform init -input=false
+
+      - name: Verify saved plan summary
+        working-directory: infra/terraform
+        run: terraform show -no-color tfplan
+
+      - name: Apply exact reviewed plan
+        working-directory: infra/terraform
+        run: terraform apply -input=false tfplan
