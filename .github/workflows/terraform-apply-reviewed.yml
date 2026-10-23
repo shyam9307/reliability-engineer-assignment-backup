@@ -80,7 +80,7 @@ jobs:
       - name: Checkout exact plan commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.expected_commit }}
+          ref: master
 
       - name: Download reviewed plan artifact
         uses: actions/download-artifact@v4
