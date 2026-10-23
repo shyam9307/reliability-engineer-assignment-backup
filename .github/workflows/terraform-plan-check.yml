@@ -1,5 +1,5 @@
 
-name: Terraform Plan Check Only
+name: Terraform Infrastructure Plan
 
 on:
   workflow_dispatch:
@@ -8,12 +8,18 @@ permissions:
   contents: read
   id-token: write
 
+concurrency:
+  group: reliability-assignment-terraform
+  cancel-in-progress: false
+
 env:
   AWS_REGION: ap-south-1
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
 
 jobs:
   plan:
-    name: Inspect Terraform state safely
+    name: Validate and plan infrastructure
     runs-on: ubuntu-latest
 
     steps:
@@ -28,17 +34,43 @@ jobs:
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Verify ECR repository
+        run: |
+          aws ecr describe-repositories \
+            --repository-names reliability-pipeline \
+            --region "$AWS_REGION"
 
       - name: Initialize Terraform
         working-directory: infra/terraform
         run: terraform init -input=false
 
-      - name: Show current Terraform state
+      - name: Format check
         working-directory: infra/terraform
-        run: terraform state list
+        run: terraform fmt -check -recursive
 
-      - name: Check current plan only
+      - name: Validate Terraform
+        working-directory: infra/terraform
+        run: terraform validate
+
+      - name: Generate infrastructure plan
         working-directory: infra/terraform
         env:
           TF_VAR_container_image: 819693014102.dkr.ecr.ap-south-1.amazonaws.com/reliability-pipeline:latest
-        run: terraform plan -input=false -lock-timeout=60s
+        run: terraform plan -input=false -lock-timeout=60s -out=tfplan
+
+      - name: Display plan for review
+        working-directory: infra/terraform
+        run: terraform show -no-color tfplan
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: reviewed-terraform-plan
+          path: infra/terraform/tfplan
+          retention-days: 1
