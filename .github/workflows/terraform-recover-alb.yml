@@ -47,9 +47,9 @@ jobs:
         working-directory: infra/terraform
         run: terraform state show aws_lb.main
 
-      - name: Remove ALB taint
-        working-directory: infra/terraform
-        run: terraform untaint aws_lb_listener.http
+      # - name: Remove ALB taint
+      #   working-directory: infra/terraform
+      #   run: terraform untaint aws_lb_listener.http
 
       - name: Generate fresh recovery plan
         working-directory: infra/terraform
