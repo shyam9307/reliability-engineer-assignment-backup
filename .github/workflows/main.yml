@@ -294,7 +294,3 @@ jobs:
       - name: Show resources scheduled for destruction
         working-directory: infra/terraform
         run: terraform plan -destroy -input=false -out=cleanup.tfplan
-
-      - name: Destroy assignment infrastructure
-        working-directory: infra/terraform
-        run: terraform apply -input=false -auto-approve cleanup.tfplan
