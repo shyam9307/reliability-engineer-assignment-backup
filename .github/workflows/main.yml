@@ -272,6 +272,8 @@ jobs:
           clear_taint_if_needed 'aws_iam_role_policy.ecs_task_cloudwatch_metrics'
           clear_taint_if_needed 'aws_cloudwatch_log_group.app'
           clear_taint_if_needed 'aws_lb_target_group.app'
+          clear_taint_if_needed 'aws_cloudwatch_log_group.app'
+          clear_taint_if_needed 'aws_lb_target_group.app'
 
 
       - name: Verify updated state
