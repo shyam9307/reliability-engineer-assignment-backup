@@ -1,0 +1,87 @@
+
+name: Terraform Reset - Destroy Existing Resources
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_destroy:
+        description: "Type DESTROY to confirm deletion of Terraform-managed resources"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  destroy:
+    name: Backup and Destroy
+    if: ${{ inputs.confirm_destroy == 'DESTROY' }}
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: infra/terraform
+
+    env:
+      AWS_REGION: ap-south-1
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      STATE_BUCKET: relassign-tfstate-819693014102-819693014102-ap-south-1-an
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::819693014102:role/GitHubActions-ReliabilityAssignment
+          aws-region: ap-south-1
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      - name: Verify current state exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws s3api head-object \
+            --bucket "$STATE_BUCKET" \
+            --key terraform.tfstate
+
+      - name: Back up current state
+        shell: bash
+        run: |
+          set -euo pipefail
+          BACKUP_KEY="backups/terraform.tfstate-before-reset-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          aws s3 cp \
+            "s3://${STATE_BUCKET}/terraform.tfstate" \
+            "s3://${STATE_BUCKET}/${BACKUP_KEY}"
+          echo "State backup created at s3://${STATE_BUCKET}/${BACKUP_KEY}"
+
+      - name: Initialize Terraform
+        run: terraform init -input=false
+
+      - name: Create destruction plan
+        run: terraform plan -destroy -input=false -out=destroy.tfplan
+
+      - name: Show destruction plan
+        run: terraform show -no-color destroy.tfplan
+
+      - name: Destroy Terraform-managed resources
+        run: terraform apply -input=false -auto-approve destroy.tfplan
+
+      - name: Verify Terraform state is empty
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform state list > /tmp/remaining-resources.txt
+          if [ -s /tmp/remaining-resources.txt ]; then
+            echo "ERROR: Resources remain in Terraform state:"
+            cat /tmp/remaining-resources.txt
+            exit 1
+          fi
+          echo "Verified: no managed resources remain in Terraform state."
