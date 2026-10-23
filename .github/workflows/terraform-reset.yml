@@ -64,8 +64,10 @@ jobs:
 
       - name: Initialize Terraform
         run: terraform init -input=false
-
+        
       - name: Create destruction plan
+        env:
+          TF_VAR_container_image: "cleanup-placeholder"
         run: terraform plan -destroy -input=false -out=destroy.tfplan
 
       - name: Show destruction plan
