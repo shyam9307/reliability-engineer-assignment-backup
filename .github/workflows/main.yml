@@ -204,7 +204,7 @@ jobs:
             --output table
 
   inspect-resource-state:
-    name: Inspect existing Terraform resource state
+    name: Clear taint on verified resources
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master'
     needs: inspect-terraform-state
     runs-on: ubuntu-latest
@@ -229,14 +229,24 @@ jobs:
         working-directory: infra/terraform
         run: terraform init -input=false
 
-      - name: Inspect existing resource state (read-only)
+      - name: Verify current tainted resources
         working-directory: infra/terraform
-        shell: bash
         run: |
-          set -euo pipefail
-          terraform state list
-          terraform state show aws_vpc.main
-          terraform state show aws_eip.nat
           terraform state show 'aws_subnet.public[0]'
           terraform state show 'aws_subnet.public[1]'
           terraform state show aws_iam_role_policy.ecs_task_cloudwatch_metrics
+
+      - name: Clear taint on verified existing resources
+        working-directory: infra/terraform
+        run: |
+          terraform untaint 'aws_subnet.public[0]'
+          terraform untaint 'aws_subnet.public[1]'
+          terraform untaint aws_iam_role_policy.ecs_task_cloudwatch_metrics
+
+      - name: Verify updated state
+        working-directory: infra/terraform
+        run: |
+          terraform state show 'aws_subnet.public[0]'
+          terraform state show 'aws_subnet.public[1]'
+          terraform state show aws_iam_role_policy.ecs_task_cloudwatch_metrics
+
