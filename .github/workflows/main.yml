@@ -228,6 +228,15 @@ jobs:
         working-directory: infra/terraform
         run: terraform init -input=false
 
+      - name: Clear taint on existing AWS resources
+        working-directory: infra/terraform
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          terraform untaint 'aws_cloudwatch_log_group.app'
+          terraform untaint 'aws_lb_target_group.app'
+
       - name: Verify current resources in state
         working-directory: infra/terraform
         run: |
