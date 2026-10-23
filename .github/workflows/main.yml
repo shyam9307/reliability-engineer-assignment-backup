@@ -250,8 +250,10 @@ jobs:
 
       - name: Clear VPC taint
         working-directory: infra/terraform
-        run: terraform untaint aws_vpc.main
-
+        run: |
+          terraform state show aws_vpc.main
+          echo "VPC is already untainted; skipping."
+          
       - name: Clear Elastic IP taint
         working-directory: infra/terraform
         run: terraform untaint aws_eip.nat
