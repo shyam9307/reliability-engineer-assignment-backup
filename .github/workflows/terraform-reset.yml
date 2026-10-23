@@ -64,11 +64,12 @@ jobs:
 
       - name: Initialize Terraform
         run: terraform init -input=false
-        
+              
       - name: Create destruction plan
         env:
-          TF_VAR_container_image: "cleanup-placeholder"
+          TF_VAR_container_image: "819693014102.dkr.ecr.ap-south-1.amazonaws.com/reliability-pipeline:cleanup"
         run: terraform plan -destroy -input=false -out=destroy.tfplan
+
 
       - name: Show destruction plan
         run: terraform show -no-color destroy.tfplan
