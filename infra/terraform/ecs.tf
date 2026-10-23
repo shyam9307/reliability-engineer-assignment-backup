@@ -108,7 +108,8 @@ resource "aws_ecs_service" "app" {
   health_check_grace_period_seconds = 60
 
   depends_on = [
-    aws_iam_role_policy.ecs_execution
+    aws_iam_role_policy.ecs_execution,
+    aws_lb_listener.http
   ]
 
   tags = local.common_tags
