@@ -237,6 +237,20 @@ jobs:
           terraform state show 'aws_subnet.public[0]'
           terraform state show 'aws_subnet.public[1]'
           terraform state show aws_iam_role_policy.ecs_task_cloudwatch_metrics
+
+      - name: Verify tainted resources exist in AWS
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          aws logs describe-log-groups \
+            --log-group-name-prefix /ecs/reliable-pipeline-demo \
+            --region ap-south-1
+
+          aws elbv2 describe-target-groups \
+            --target-group-arns arn:aws:elasticloadbalancing:ap-south-1:819693014102:targetgroup/reliable-pipeline-demo-tg/8ca7c9c26cb2611c \
+            --region ap-south-1
+
       
       - name: Clear taint on verified existing resources
         working-directory: infra/terraform
@@ -256,6 +270,8 @@ jobs:
           clear_taint_if_needed 'aws_subnet.public[0]'
           clear_taint_if_needed 'aws_subnet.public[1]'
           clear_taint_if_needed 'aws_iam_role_policy.ecs_task_cloudwatch_metrics'
+          clear_taint_if_needed 'aws_cloudwatch_log_group.app'
+          clear_taint_if_needed 'aws_lb_target_group.app'
 
 
       - name: Verify updated state
